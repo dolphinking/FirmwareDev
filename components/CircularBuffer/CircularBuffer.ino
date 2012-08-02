@@ -29,6 +29,7 @@ void loop()
   buffer[pos] = val;
   
   // Get the value at offset
+  // % is http://en.wikipedia.org/wiki/Modulo_operation
   unsigned char offset_pos = (pos + OFFSET) % SIZE;
   double offset_val = buffer[offset_pos];
   

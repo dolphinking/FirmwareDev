@@ -2,14 +2,18 @@
 unsigned long val = 0;
 unsigned long timer;
 
+byte pin = 2;  // ADC pin
+
 void setup()
 {
   Serial.begin(9600);
 
-  ADMUX = (0x02 & 0x07); // Set ADC reference to external VFREF and first defined port
-  ADCSRA |= (1 << ADEN);  // Enable ADC
-  ADCSRA |= (1 << ADATE); // Enable auto-triggering
-  ADCSRA |= (1 << ADIE);  // Enable ADC Interrupt
+  // Set ADC reference to external VFREF and first defined port
+  // openenergymonitor.blogspot.co.uk/2012/08/low-level-adc-control-admux.html
+  ADMUX = 0x40 | (pin & 0x07);  
+  ADCSRA |= (1 << ADEN);        // Enable ADC
+  ADCSRA |= (1 << ADATE);       // Enable auto-triggering
+  ADCSRA |= (1 << ADIE);        // Enable ADC Interrupt
 
   sei();
 
