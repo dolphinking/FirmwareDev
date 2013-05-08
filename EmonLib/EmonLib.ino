@@ -2,15 +2,6 @@
 
   Development version of new EmonLib, that uses the atmega's free running interrupt based ADC sampling mode.
 
-  //-----------------------------------------------------------------------------------------------------------------  
-  
-  FILTER PROBLEM
-  
-  I've been trying to implement the integer and long based high pass filter as used by Jorg Becker and AVR465 example
-  but having trouble getting it to work its currently reporting the rms voltage at about 14000 rather than 244 V
-
-  //-----------------------------------------------------------------------------------------------------------------  
-
   FURTHER DEVELOPMENT
   
   - zero crossing detection with complete measurements being made on an integer number of wavelengths, interestingly AVR465 does not do this
