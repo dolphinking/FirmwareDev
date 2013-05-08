@@ -68,25 +68,24 @@ double ICAL = 111.1;
 double PHASECAL= 1.7;
 
 int inPinV = 2;
-signed int lastSampleV,sampleV;         // sample_ holds the raw analog read value, lastSample_ holds the last sample
-signed long lastFilteredV,filteredV;    // Filtered_ is the raw analog value minus the DC offset
-double phaseShiftedV;                   // Holds the calibrated phase shifted voltage.
+signed int lastSampleV,sampleV;
+signed long shifted_filteredV;
 float sumV;
 
 int inPinI1 = 0;
-int lastSampleI1,sampleI1;    
-double lastFilteredI1, filteredI1;                  
-double sumI1,sumP1;
+signed int lastSampleI1,sampleI1;
+signed long shifted_filteredI1;
+float sumI1,sumP1;
 
 int inPinI2 = 1;
-int lastSampleI2,sampleI2;    
-double lastFilteredI2, filteredI2;                  
-double sumI2,sumP2;
+signed int lastSampleI2,sampleI2;
+signed long shifted_filteredI2;
+float sumI2,sumP2;
 
 int inPinI3 = 3;
-int lastSampleI3,sampleI3;    
-double lastFilteredI3, filteredI3;                  
-double sumI3,sumP3;
+signed int lastSampleI3,sampleI3;
+signed long shifted_filteredI3;
+float sumI3,sumP3;
 
 int numberOfSamples = 0;
 
@@ -135,54 +134,79 @@ ISR(ADC_vect)
 
 void calc()
 {
-  signed long TempL;
-  signed int	TempI;
+  signed long TempLong;
+  static signed long filteredV;
+  static signed long filteredI1;
+  static signed long filteredI2;
+  static signed long filteredI3;
+  
+  signed long n;
   
   numberOfSamples++;                                   // Count number of times looped.
 
+  // VOLTAGE
   lastSampleV=sampleV;                                 // Used for digital high pass filter
-  lastFilteredV = filteredV;
   sampleV = analog_input_values[inPinV];               // Read in raw voltage signal
-  
-  filteredV = 0.996*(filteredV+sampleV-lastSampleV); // Apply digital high pass filter to remove 2.5V DC offset (centered on 0V). 
 
-  // AVR465.c
-  // TempL=255*(long)filteredV;
-  // TempL=TempL>>8;
-  // TempI=sampleV-lastSampleV;
-  // TempL=TempL+255*(long)TempI;
-  // filteredV=TempL;
-  
-  // Jorg Becker + Pcunha
-  // TempL = (((long)filteredV<<8)-filteredV)>>8; // TempL=0.996*VoltageSample[0].Filtered
-  // TempS = sampleV-lastSampleV;
-  // filteredV = TempL+(((long)TempS)<<8)-TempS;  // (256-1)*TempS = 255*TempS
-  
-  sumV += ((long)filteredV * filteredV);                         // Root-mean-square method voltage
-  
-  phaseShiftedV = lastFilteredV + PHASECAL * (filteredV - lastFilteredV); 
-      
+  TempLong = (long)(sampleV-lastSampleV)<<8;           // (sampleV-lastSampleV) * 256.0
+  TempLong += shifted_filteredV;
+  shifted_filteredV = TempLong - (TempLong>>8);
+  filteredV = (shifted_filteredV+128)>>8;              // 128 as being  ½ << 8 
+  sumV += filteredV * filteredV;
+
+  // CT1
   lastSampleI1=sampleI1;
-  lastFilteredI1 = filteredI1;
   sampleI1 = analog_input_values[inPinI1];
-  filteredI1 = 0.996*(lastFilteredI1+sampleI1-lastSampleI1);
+  
+  TempLong = (long)(sampleI1-lastSampleI1)<<8;
+  TempLong += shifted_filteredI1;
+  shifted_filteredI1 = TempLong - (TempLong>>8);
+  filteredI1 = (shifted_filteredI1+128)>>8;
+  
   sumI1 += filteredI1 * filteredI1;
-  sumP1 += phaseShiftedV * filteredI1;
+  sumP1 += filteredV * filteredI1;
   
-  
+  // CT2
   lastSampleI2=sampleI2;
-  lastFilteredI2 = filteredI2;
   sampleI2 = analog_input_values[inPinI2]; 
-  filteredI2 = 0.996*(lastFilteredI2+sampleI2-lastSampleI2);
-  sumI2 += filteredI2 * filteredI2;
-  sumP2 += phaseShiftedV * filteredI2;
   
+  TempLong = (long)(sampleI2-lastSampleI2)<<8;
+  TempLong += shifted_filteredI2;
+  shifted_filteredI2 = TempLong - (TempLong>>8);
+  filteredI2 = (shifted_filteredI2+128)>>8;
+  
+  sumI2 += filteredI2 * filteredI2;
+  sumP2 += filteredV * filteredI2;
+  
+  // CT3
   lastSampleI3=sampleI3;
-  lastFilteredI3 = filteredI3;
   sampleI3 = analog_input_values[inPinI3];
-  filteredI3 = 0.996*(lastFilteredI3+sampleI3-lastSampleI3);
+  
+  TempLong = (long)(sampleI3-lastSampleI3)<<8;
+  TempLong += shifted_filteredI3;
+  shifted_filteredI3 = TempLong - (TempLong>>8);
+  filteredI3 = (shifted_filteredI3+128)>>8;
+  
   sumI3 += filteredI3 * filteredI3;
-  sumP3 += phaseShiftedV * filteredI3;
+  sumP3 += filteredV * filteredI3;
+  
+  /*
+  
+  FLOATING POINT:
+  filteredI1 = 0.996 * (filteredI1+sampleI1-lastSampleI1)
+  
+  BITWISE SIMPLEST FORM:
+  n = lastFilteredI1 + sampleI1 - lastSampleI1;
+  filteredI1 = ((n<<8)-n+128)>>8;
+
+  BITWISE WORKS BETTER WITH SMALLER SIGNALS:
+  TempLong = (long)(sampleI1-lastSampleI1)<<8;
+  TempLong += shifted_filteredI1;
+  shifted_filteredI1 = TempLong - (TempLong>>8);
+  filteredI1 = (shifted_filteredI1+128)>>8;
+  
+  */
+  
 }
 
 void loop()
