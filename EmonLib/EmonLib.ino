@@ -28,7 +28,7 @@
                   ADC step size relative to signal, sampling at slightly different places each time could average out errors caused 
                   by sampled value being one step up or down from actual value..
               
-  - Dev Question: MartinR uses low pass filters instead of high pass filters, what is the best solution?
+  - Dev Question: MartinR and Robert uses low pass filters instead of high pass filters, what is the best solution?
   
   - Note: an important thing to watch is that the calc() function completes before the next adc sample starts as otherwise
           sample values get mixed up.
