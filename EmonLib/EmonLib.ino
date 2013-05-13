@@ -19,7 +19,7 @@
                   ADC step size relative to signal, sampling at slightly different places each time could average out errors caused 
                   by sampled value being one step up or down from actual value..
               
-  - Dev Question: MartinR and Robert uses low pass filters instead of high pass filters, what is the best solution?
+  - Dev Question: MartinR and Robert Wall uses low pass filters instead of high pass filters, what is the best solution?
   
   - Note: an important thing to watch is that the calc() function completes before the next adc sample starts as otherwise
           sample values get mixed up.
@@ -60,22 +60,22 @@ double PHASECAL= 1.7;
 
 int inPinV = 2;
 signed int lastSampleV,sampleV;
-signed long shifted_filteredV;
+signed long shifted_filterV;
 float sumV;
 
 int inPinI1 = 0;
 signed int lastSampleI1,sampleI1;
-signed long shifted_filteredI1;
+signed long shifted_filterI1;
 float sumI1,sumP1;
 
 int inPinI2 = 1;
 signed int lastSampleI2,sampleI2;
-signed long shifted_filteredI2;
+signed long shifted_filterI2;
 float sumI2,sumP2;
 
 int inPinI3 = 3;
 signed int lastSampleI3,sampleI3;
-signed long shifted_filteredI3;
+signed long shifted_filterI3;
 float sumI3,sumP3;
 
 int numberOfSamples = 0;
@@ -125,7 +125,7 @@ ISR(ADC_vect)
 
 void calc()
 {
-  signed long TempLong;
+  signed long shiftedFCL;
   static signed long filteredV;
   static signed long filteredI1;
   static signed long filteredI2;
@@ -139,20 +139,21 @@ void calc()
   lastSampleV=sampleV;                                 // Used for digital high pass filter
   sampleV = analog_input_values[inPinV];               // Read in raw voltage signal
 
-  TempLong = (long)(sampleV-lastSampleV)<<8;           // (sampleV-lastSampleV) * 256.0
-  TempLong += shifted_filteredV;
-  shifted_filteredV = TempLong - (TempLong>>8);
-  filteredV = (shifted_filteredV+128)>>8;              // 128 as being  ½ << 8 
+  // See documentation here for tutorial on digital filters:
+  // http://openenergymonitor.org/emon/buildingblocks/digital-filters-for-offset-removal
+  shiftedFCL = shifted_filterV + (long)((sampleV-lastSampleV)<<8);
+  shifted_filterV = shiftedFCL - (shiftedFCL>>8);
+  filteredV = (shifted_filterV+128)>>8;
+  
   sumV += filteredV * filteredV;
 
   // CT1
   lastSampleI1=sampleI1;
   sampleI1 = analog_input_values[inPinI1];
   
-  TempLong = (long)(sampleI1-lastSampleI1)<<8;
-  TempLong += shifted_filteredI1;
-  shifted_filteredI1 = TempLong - (TempLong>>8);
-  filteredI1 = (shifted_filteredI1+128)>>8;
+  shiftedFCL = shifted_filterI1 + (long)((sampleI1-lastSampleI1)<<8);
+  shifted_filterI1 = shiftedFCL - (shiftedFCL>>8);
+  filteredI1 = (shifted_filterI1+128)>>8;
   
   sumI1 += filteredI1 * filteredI1;
   sumP1 += filteredV * filteredI1;
@@ -161,10 +162,9 @@ void calc()
   lastSampleI2=sampleI2;
   sampleI2 = analog_input_values[inPinI2]; 
   
-  TempLong = (long)(sampleI2-lastSampleI2)<<8;
-  TempLong += shifted_filteredI2;
-  shifted_filteredI2 = TempLong - (TempLong>>8);
-  filteredI2 = (shifted_filteredI2+128)>>8;
+  shiftedFCL = shifted_filterI2 + (long)((sampleI2-lastSampleI2)<<8);
+  shifted_filterI2 = shiftedFCL - (shiftedFCL>>8);
+  filteredI2 = (shifted_filterI2+128)>>8;
   
   sumI2 += filteredI2 * filteredI2;
   sumP2 += filteredV * filteredI2;
@@ -173,30 +173,13 @@ void calc()
   lastSampleI3=sampleI3;
   sampleI3 = analog_input_values[inPinI3];
   
-  TempLong = (long)(sampleI3-lastSampleI3)<<8;
-  TempLong += shifted_filteredI3;
-  shifted_filteredI3 = TempLong - (TempLong>>8);
-  filteredI3 = (shifted_filteredI3+128)>>8;
+  shiftedFCL = shifted_filterI3 + (long)((sampleI3-lastSampleI3)<<8);
+  shifted_filterI3 = shiftedFCL - (shiftedFCL>>8);
+  filteredI3 = (shifted_filterI3+128)>>8;
   
   sumI3 += filteredI3 * filteredI3;
   sumP3 += filteredV * filteredI3;
-  
-  /*
-  
-  FLOATING POINT:
-  filteredI1 = 0.996 * (filteredI1+sampleI1-lastSampleI1)
-  
-  BITWISE SIMPLEST FORM:
-  n = lastFilteredI1 + sampleI1 - lastSampleI1;
-  filteredI1 = ((n<<8)-n+128)>>8;
-
-  BITWISE WORKS BETTER WITH SMALLER SIGNALS:
-  TempLong = (long)(sampleI1-lastSampleI1)<<8;
-  TempLong += shifted_filteredI1;
-  shifted_filteredI1 = TempLong - (TempLong>>8);
-  filteredI1 = (shifted_filteredI1+128)>>8;
-  
-  */
+ 
   
 }
 
