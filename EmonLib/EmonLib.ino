@@ -61,24 +61,29 @@ double PHASECAL= 1.7;
 int inPinV = 2;
 signed int lastSampleV,sampleV;
 signed long shifted_filterV;
-float sumV;
+float sumV, total_sumV;
 
 int inPinI1 = 0;
 signed int lastSampleI1,sampleI1;
 signed long shifted_filterI1;
-float sumI1,sumP1;
+float sumI1,sumP1,total_sumI1,total_sumP1;
 
 int inPinI2 = 1;
 signed int lastSampleI2,sampleI2;
 signed long shifted_filterI2;
-float sumI2,sumP2;
+float sumI2,sumP2,total_sumI2,total_sumP2;
 
 int inPinI3 = 3;
 signed int lastSampleI3,sampleI3;
 signed long shifted_filterI3;
-float sumI3,sumP3;
+float sumI3,sumP3,total_sumI3,total_sumP3;
 
-int numberOfSamples = 0;
+unsigned int numberOfSamples = 0, total_numberOfSamples;
+unsigned int numberOfCycles = 0;
+
+boolean last_cyclestate, cyclestate = false;
+unsigned long last_cycle_time, cycle_period;
+unsigned long total_cycle_period = 0;
 
 void setup()
 {
@@ -93,6 +98,8 @@ void setup()
   ADCSRA |= _BV(ADPS2) | _BV(ADPS1) | _BV(ADPS0);
 
   ADCSRA |= _BV(ADEN) | _BV(ADSC);
+  
+  last_cycle_time = micros();
 }
 
 // ISR(ADC_vect) is the function called after each single channel ADC conversion is complete
@@ -124,7 +131,7 @@ ISR(ADC_vect)
 }
 
 void calc()
-{
+{ 
   signed long shiftedFCL;
   static signed long filteredV;
   static signed long filteredI1;
@@ -144,7 +151,7 @@ void calc()
   shiftedFCL = shifted_filterV + (long)((sampleV-lastSampleV)<<8);
   shifted_filterV = shiftedFCL - (shiftedFCL>>8);
   filteredV = (shifted_filterV+128)>>8;
-  
+    
   sumV += filteredV * filteredV;
 
   // CT1
@@ -179,8 +186,34 @@ void calc()
   
   sumI3 += filteredI3 * filteredI3;
   sumP3 += filteredV * filteredI3;
- 
   
+  
+  //
+  
+  last_cyclestate = cyclestate;
+  if (filteredV>0) cyclestate = true; else cyclestate = false;
+  
+  if (last_cyclestate == 0 && cyclestate == 1) {
+    numberOfCycles ++;
+
+    unsigned long cycle_time = micros();
+    cycle_period = cycle_time - last_cycle_time;
+    last_cycle_time = cycle_time;
+    
+    total_cycle_period += cycle_period; 
+
+    total_numberOfSamples = numberOfSamples;
+    total_sumV = sumV;
+
+    total_sumI1 = sumI1;
+    total_sumP1 = sumP1;
+
+    total_sumI2 = sumI2;
+    total_sumP2 = sumP2;
+    
+    total_sumI3 = sumI3;
+    total_sumP3 = sumP3;
+  }  
 }
 
 void loop()
@@ -188,7 +221,7 @@ void loop()
   if ((millis()-timer)>1000)
   {
     timer = millis();
-      
+
     //-------------------------------------------------------------------------------------------------------------------------
     // 3) Post loop calculations
     //------------------------------------------------------------------------------------------------------------------------- 
@@ -198,13 +231,13 @@ void loop()
     int SUPPLYVOLTAGE = 3300;
     
     double V_RATIO = VCAL *((SUPPLYVOLTAGE/1000.0) / 1023.0);
-    Vrms = V_RATIO * sqrt(sumV / numberOfSamples); 
+    Vrms = V_RATIO * sqrt(total_sumV / total_numberOfSamples); 
     
     double I_RATIO = ICAL *((SUPPLYVOLTAGE/1000.0) / 1023.0);
-    Irms = I_RATIO * sqrt(sumI1 / numberOfSamples); 
+    Irms = I_RATIO * sqrt(total_sumI1 / total_numberOfSamples); 
 
     //Calculation power values
-    realPower = V_RATIO * I_RATIO * sumP1 / numberOfSamples;
+    realPower = V_RATIO * I_RATIO * total_sumP1 / total_numberOfSamples;
     apparentPower = Vrms * Irms;
     powerFactor=realPower / apparentPower;
 
@@ -231,6 +264,12 @@ void loop()
     Serial.print(Irms);
     Serial.print(' ');
     Serial.print(powerFactor);
-    Serial.println(' ');
+    Serial.print(' ');
+    
+    Serial.print(1.0/((total_cycle_period / numberOfCycles) /1000000.0));
+    total_cycle_period = 0; 
+    numberOfCycles = 0;
+    
+    Serial.println(" Hz");
   }
 }
